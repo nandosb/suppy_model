@@ -1,0 +1,181 @@
+//  Archivo Jenkinsfile para api-template
+//
+//  by:
+
+def PROJECT_ID = "chiper-rappi-develop"
+def imageTag = "gcr.io/${PROJECT_ID}/${JOB_NAME}:${BUILD_NUMBER}"
+def JENKINS_MAIL = "jenkins@hugogiraldodevops.com"
+def MAIL_CI = "fernando.serrano@rappi.com"
+def MAIL_CD_DEV = "fernando.serrano@rappi.com"
+def MAIL_CD_LAB = "fernando.serrano@rappi.com"
+def PROJECT_ID_PROD = "chiper-rappi"
+def MAIL_CD_PROD = "fernando.serrano@rappi.com"
+
+pipeline {
+  options {
+      timeout(time: 50, unit: 'MINUTES')
+  }
+  parameters {
+        string(defaultValue: '',description: 'Please enter the commit',name: 'commitSHA')
+  }  
+  agent {
+    kubernetes {
+      label 'slave-lb-api-rappi-template'
+      defaultContainer 'jnlp'
+      yaml """
+apiversion: v1
+kind: Pod
+metadata:
+  labels:
+    component: ci
+spec:
+  serviceAccountName: cd-jenkins
+  securityContext:
+    runAsUser: 0   
+  volumes:
+  - name: dockersock
+    hostPath:
+      path: "/var/run/docker.sock"
+  - name: docker
+    hostPath:
+      path: "/usr/bin/docker"
+  - name: google-cloud-key
+    secret:
+      secretName: registry-jenkins
+  containers:
+  - name: gcloud
+    image: gcr.io/cloud-builders/gcloud
+    volumeMounts:
+    - name: google-cloud-key
+      readOnly: true
+      mountPath: "/var/secrets/google"
+    - name: docker
+      mountPath: "/usr/bin/docker"
+    - name: dockersock
+      mountPath: "/var/run/docker.sock"
+    command:
+    - cat
+    env:
+    - name: GOOGLE_APPLICATION_CREDENTIALS
+      value: /var/secrets/google/key.json
+    tty: true
+  - name: node
+    image: node:10.16-alpine
+    command:
+    - cat
+    tty: true
+  - name: flyway
+    image: gcr.io/chiper-rappi-develop/flyway:latest
+    volumeMounts:
+    - name: google-cloud-key
+      readOnly: true
+      mountPath: "/var/secrets/google"
+    - name: docker
+      mountPath: "/usr/bin/docker"
+    - name: dockersock
+      mountPath: "/var/run/docker.sock"
+    command:
+    - cat
+    env:
+    - name: GOOGLE_APPLICATION_CREDENTIALS
+      value: /var/secrets/google/key.json
+    tty: true    
+  - name: kubectl
+    image: gcr.io/cloud-builders/kubectl
+    volumeMounts:
+    - name: google-cloud-key
+      readOnly: true
+      mountPath: "/var/secrets/google"
+    command:
+    - cat
+    env:
+    - name: GOOGLE_APPLICATION_CREDENTIALS
+      value: /var/secrets/google/key.json
+    tty: true
+  - name: docker
+    image: docker:18
+    volumeMounts:
+    - name: google-cloud-key
+      readOnly: true
+      mountPath: "/var/secrets/google"
+    - name: docker
+      mountPath: "/usr/bin/docker"
+    - name: dockersock
+      mountPath: "/var/run/docker.sock"
+    command:
+    - cat
+    env:
+    - name: GOOGLE_APPLICATION_CREDENTIALS
+      value: /var/secrets/google/key.json
+    tty: true
+"""
+    }
+  }
+  environment {
+    COMMITTER_EMAIL = "fernando.serrano@rappi.com"
+  }
+  stages {
+    stage('Initialize') {
+      steps {
+        container('docker') {
+          sh 'docker --version'
+        }
+        container('gcloud') {
+          sh 'gcloud auth activate-service-account --key-file=$GOOGLE_APPLICATION_CREDENTIALS'
+          sh "gcloud config set project ${PROJECT_ID}"
+        }
+      }
+    }
+    stage('Deploy develop') {
+      // Developer Branches
+      when { branch 'develop' }
+      steps {
+        container('kubectl') {
+          sh 'gcloud auth activate-service-account --key-file=$GOOGLE_APPLICATION_CREDENTIALS'
+          sh "gcloud config set project ${PROJECT_ID}"
+          sh "gcloud container clusters get-credentials rappi-develop --zone us-central1-f --project chiper-rappi-develop"
+          
+          // sh "sed -i.bak 's#us.gcr.io/dataflow-chiper/chiper-lb-api:latest#${imageTag}#' ./infrastucture/k8s/dev/deployment.yaml"
+          // sh 'kubectl apply -f ./infrastucture/k8s/dev/config.yaml'          
+          // sh 'kubectl apply -f ./infrastucture/k8s/dev/deployment.yaml'
+        }
+      }
+    }
+    stage ('Aprobacion Produccion') {
+      when { branch 'master' }
+      steps {
+          timeout(time:2, unit:'DAYS'){
+            input message: 'Aprueba Despliegue Ambiente Produccion?',
+            submitter: 'DevOps'
+        }
+      }
+    }
+    stage ('Deploy Produccion') {
+      when { branch 'master' }
+      steps {
+        container('kubectl') {
+          sh 'gcloud auth activate-service-account --key-file=$GOOGLE_APPLICATION_CREDENTIALS'
+          sh "gcloud config set project ${PROJECT_ID_PROD}"
+          sh "gcloud container clusters get-credentials rappi-prod --region us-central1 --project chiper-rappi"
+          // sh "sed -i.bak 's#us.gcr.io/dataflow-chiper/chiper-lb-api:latest#${imageTag}#' ./infrastucture/k8s/prod/deployment.yaml"
+          // sh 'kubectl apply -f ./infrastucture/k8s/prod/config.yaml'          
+          // sh 'kubectl apply -f ./infrastucture/k8s/prod/deployment.yaml'
+        }
+      }
+    }
+  }
+  post {
+    always {
+      echo 'Pipeline Finalizado'
+    }
+    aborted{
+      echo 'El Pipeline ha sido cancelado'
+    }
+    failure {
+      echo 'Pipeline Fallo'
+    }
+    success {
+      echo 'Pipeline Exitoso!!'
+    }
+  }
+}
