@@ -134,6 +134,9 @@ spec:
           sh 'gcloud auth activate-service-account --key-file=$GOOGLE_APPLICATION_CREDENTIALS'
           sh "gcloud config set project ${PROJECT_ID}"
           sh "gcloud container clusters get-credentials rappi-develop --zone us-central1-f --project chiper-rappi-develop"
+
+          gcloud functions deploy supply_model --allow-unauthenticated --source=https://github.com/nandosb/suppy_model
+
           
           // sh "sed -i.bak 's#us.gcr.io/dataflow-chiper/chiper-lb-api:latest#${imageTag}#' ./infrastucture/k8s/dev/deployment.yaml"
           // sh 'kubectl apply -f ./infrastucture/k8s/dev/config.yaml'          
