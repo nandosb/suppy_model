@@ -135,7 +135,13 @@ spec:
           sh "gcloud config set project ${PROJECT_ID}"
           sh "gcloud container clusters get-credentials rappi-develop --zone us-central1-f --project chiper-rappi-develop"
 
-          sh "gcloud functions deploy supply_model --runtime=python37 --allow-unauthenticated --source=https://github.com/nandosb/suppy_model"
+          sh "gcloud functions deploy supply_model --runtime=python37 --allow-unauthenticated 
+          
+          // --source=https://github.com/nandosb/suppy_model"
+          
+          // https://source.developers.google.com/projects/{PROJECT_ID}/repos/{REPOSITORY_ID}/revisions/{REVISION_ID}/paths/{PATH}
+          // https://source.developers.google.com/projects/{PROJECT_ID}/repos/{REPOSITORY_ID}/moveable-aliases/{BRANCH_ID}/paths/{PATH}
+          // https://source.developers.google.com/projects/{PROJECT_ID}/repos/{REPOSITORY_ID}/fixed-aliases/{TAG_ID}/paths/{PATH}
 
           
           // sh "sed -i.bak 's#us.gcr.io/dataflow-chiper/chiper-lb-api:latest#${imageTag}#' ./infrastucture/k8s/dev/deployment.yaml"
